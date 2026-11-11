@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Achadinhos da Emilly</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fbf6f4;--card:#fff;--ink:#4a3a3d;--muted:#a08c8f;--rose:#c98b94;--rose-soft:#f2dfe0;--line:#eddcdc;
+--serif:"Cormorant Garamond",Georgia,serif;--sans:"Jost",system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box;margin:0}
+body{font-family:var(--sans);font-weight:300;background:var(--bg);color:var(--ink);max-width:760px;margin:auto;padding:0 20px 48px}
+header{text-align:center;padding:56px 0 28px}
+header small{display:block;letter-spacing:.28em;text-transform:uppercase;font-size:.68rem;color:var(--rose);margin-bottom:12px}
+h1{font-family:var(--serif);font-weight:500;font-size:2.4rem;letter-spacing:.01em}
+header p{color:var(--muted);font-size:.92rem;margin-top:8px}
+.search input{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;padding:10px 2px;font:inherit;font-size:.95rem;color:var(--ink);outline:none}
+.search input:focus{border-color:var(--rose)}
+.search input::placeholder{color:var(--muted)}
+.chips{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;gap:22px;overflow-x:auto;padding:16px 0 12px;scrollbar-width:none}
+.chip{flex:none;background:none;border:0;border-bottom:1px solid transparent;padding:4px 0;font:inherit;font-size:.78rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+.chip.on{color:var(--ink);border-color:var(--rose)}
+h2{font-family:var(--serif);font-weight:500;font-size:1.5rem;margin:30px 0 14px}
+.feat{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+.feat .card{flex:none;width:58%;max-width:260px;scroll-snap-align:start}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px 14px}
+@media(min-width:600px){.grid{grid-template-columns:repeat(3,1fr)}}
+.card{display:flex;flex-direction:column;text-decoration:none;color:inherit}
+.img{aspect-ratio:4/5;background:var(--rose-soft);position:relative;overflow:hidden;border-radius:2px}
+.img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .5s}
+.card:hover .img img{transform:scale(1.03)}
+.tag{position:absolute;top:10px;left:10px;z-index:1;background:var(--bg);color:var(--rose);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;padding:4px 8px}
+.name{font-size:.88rem;line-height:1.35;margin-top:10px}
+.price{font-family:var(--serif);font-size:1.15rem;margin-top:2px}
+.btn{margin-top:8px;font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--rose);border-bottom:1px solid var(--rose-soft);align-self:flex-start;padding-bottom:2px}
+.card:hover .btn{border-color:var(--rose)}
+.empty{text-align:center;color:var(--muted);padding:36px 0;grid-column:1/-1}
+footer{text-align:center;color:var(--muted);font-size:.72rem;margin-top:48px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <small>Preferidos da Emy</small>
+  <h1>Diário da Emy</h1>
+  <p>Tudo o que eu amo, em um só lugar.</p>
+</header>
+<div class="search"><input id="q" type="search" placeholder="Buscar"></div>
+<nav class="chips" id="chips"></nav>
+<section id="featSec"><h2>Favoritos</h2><div class="feat" id="feat"></div></section>
+<h2 id="gridTitle">Todos</h2>
+<div class="grid" id="grid"></div>
+<footer>Alguns links são de afiliada.<br>Posso receber uma pequena comissão, sem custo extra para você.</footer>
+
+<script>
+/* ====== CONFIGURAÇÃO ======
+   Cole aqui o link do Web App do Apps Script (termina em /exec) ou o link da planilha publicada como CSV.
+   Enquanto estiver vazio, o site mostra produtos de exemplo. */
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbyeT3FjAJcYSVYTF1HyveHCViryqyPrZOkrLnNdAP8C0F71kVvklUDH88nP8X0yEQ6x/exec";
+
+const EXEMPLO = [
+  {nome:"Organizador de maquiagem giratório", preco:"R$ 39,90", cat:"Beleza", link:"#", img:"", top:"sim", tag:"Mais vendido", ativo:"sim"},
+  {nome:"Luminária LED de mesa", preco:"R$ 29,90", cat:"Casa", link:"#", img:"", top:"sim", tag:""},
+  {nome:"Kit de pincéis", preco:"R$ 24,90", cat:"Beleza", link:"#", img:"", top:"", tag:"Promo"},
+  {nome:"Bolsa transversal", preco:"R$ 34,90", cat:"Moda", link:"#", img:"", top:"", tag:""}
+];
+
+let PRODUTOS = [], CATS = ["Todos"], cat = "Todos", busca = "";
+const $ = id => document.getElementById(id);
+const esc = s => String(s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const seguro = u => /^(https?:\/\/|#|fotos\/)/i.test(u||"") ? u : "#";
+
+function parseCSV(t){
+  const rows=[]; let row=[], cur="", q=false;
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(q){ if(c==='"'&&t[i+1]==='"'){cur+='"';i++} else if(c==='"') q=false; else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ row.push(cur); cur=""; }
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&t[i+1]==='\n') i++; row.push(cur); rows.push(row); row=[]; cur=""; }
+    else cur+=c;
+  }
+  if(cur||row.length){ row.push(cur); rows.push(row); }
+  const head = rows.shift().map(h => h.trim().toLowerCase());
+  return rows.filter(r => r.some(x => x.trim())).map(r => Object.fromEntries(head.map((h,i) => [h,(r[i]||"").trim()])));
+}
+
+function card(p){
+  const img = p.img ? `<img src="${esc(seguro(p.img))}" alt="${esc(p.nome)}" loading="lazy" onerror="this.remove()">` : "";
+  return `<a class="card" href="${esc(seguro(p.link))}" target="_blank" rel="noopener sponsored">
+    <div class="img">${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ""}${img}</div>
+    <div class="name">${esc(p.nome)}</div><div class="price">${esc(p.preco)}</div><div class="btn">Ver na Shopee</div></a>`;
+}
+function render(){
+  $("chips").innerHTML = CATS.map(c => `<button class="chip ${c===cat?"on":""}" data-c="${esc(c)}">${esc(c)}</button>`).join("");
+  const lista = PRODUTOS.filter(p => (cat==="Todos" || p.cat===cat) && p.nome.toLowerCase().includes(busca));
+  const tops = PRODUTOS.filter(p => /^(sim|s|x|1|true)$/i.test(p.top||""));
+  $("featSec").style.display = (cat==="Todos" && !busca && tops.length) ? "" : "none";
+  $("feat").innerHTML = tops.map(card).join("");
+  $("gridTitle").textContent = cat==="Todos" ? "Todos" : cat;
+  $("grid").innerHTML = lista.length ? lista.map(card).join("") : `<div class="empty">Nada encontrado.</div>`;
+}
+function iniciar(lista){
+  PRODUTOS = lista.filter(p => p.nome && !/^(n|não|nao|no|0|false)$/i.test(p.ativo||""));
+  CATS = ["Todos", ...new Set(PRODUTOS.map(p => p.cat).filter(Boolean))];
+  render();
+}
+$("chips").addEventListener("click", e => { if(e.target.dataset.c){ cat = e.target.dataset.c; render(); } });
+$("q").addEventListener("input", e => { busca = e.target.value.toLowerCase().trim(); render(); });
+
+$("grid").innerHTML = `<div class="empty">Carregando...</div>`;
+if(!SHEET_URL){ iniciar(EXEMPLO); }
+else fetch(SHEET_URL).then(r => r.text()).then(t => iniciar(t.trim().startsWith("[") ? JSON.parse(t) : parseCSV(t)))
+  .catch(() => { $("grid").innerHTML = `<div class="empty">Não consegui carregar os produtos agora. Tente novamente em instantes.</div>`; });
+</script>
+</body>
+</html>
